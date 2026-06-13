@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Estudos Nuvem - ENEM 2026</title>
+    <!-- Scripts do Firebase para Nuvem -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root {
+            --bg-body: #121214;
+            --bg-card: #1d1d22;
+            --text-main: #f5f5f7;
+            --text-muted: #86868b;
+            --primary: #2f80ed;
+            --success: #27ae60;
+            --accent: #e2b93c;
+            --border: #2a2a30;
+            --ai-color: #8e44ad;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-body); color: var(--text-main); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1200px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; }
+        header { grid-column: span 12; display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        
+        /* Tela de Autenticação */
+        #auth-screen { position: fixed; top:0; left:0; width:100vw; height:100vh; background: var(--bg-body); display:flex; justify-content:center; align-items:center; z-index:999; }
+        .auth-card { background: var(--bg-card); padding: 30px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 400px; text-align: center; }
+        .auth-input { width: 100%; padding: 12px; margin: 10px 0; background: var(--bg-body); border: 1px solid var(--border); color: #fff; border-radius: 6px; }
+
+        .sidebar-left { grid-column: span 4; display: flex; flex-direction: column; gap: 20px; }
+        .main-content { grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); gap: 20px; }
+        .countdown-box, .hoje-box, .ai-box, .progress-box, .checklist-box, .cronograma-box, .redacao-box { grid-column: span 8; }
+        .timer-section { grid-column: span 4; }
+        .streak-box { grid-column: span 4; text-align: center; }
+        .hoje-box { border-left: 4px solid var(--accent); }
+        .ai-box { border-left: 4px solid var(--ai-color); background: #23192e; }
+        .timer-display { font-size: 1.8rem; font-weight: bold; margin-top: 10px; color: var(--accent); }
+        .streak-number { font-size: 2.5rem; font-weight: 800; color: #ff6b6b; }
+        .progress-container { background: var(--border); border-radius: 20px; height: 15px; overflow: hidden; margin-top: 10px; }
+        .progress-bar { background: linear-gradient(90deg, var(--primary), var(--success)); height: 100%; width: 0%; transition: width 0.3s; }
+        
+        .big-button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-start { background: var(--primary); color: #fff; }
+        .btn-stop { background: #e74c3c; color: #fff; }
+        .btn-ai { background: var(--ai-color); color: white; }
+        .btn-add { background: var(--success); color: white; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; }
+
+        .list-item { display: flex; align-items: center; margin: 10px 0; }
+        .list-item input { margin-right: 10px; }
+        .done { text-decoration: line-through; color: var(--text-muted); }
+        .day-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+        .day-name { font-weight: bold; color: var(--primary); width: 90px; }
+        .day-task { flex-grow: 1; border: none; background: transparent; color: var(--text-main); }
+        .day-task:focus { outline: none; border-bottom: 1px solid var(--primary); }
+        .history-list { max-height: 250px; overflow-y: auto; margin-top: 10px; }
+        .history-item { padding: 8px; background: var(--bg-body); border-radius: 6px; margin-bottom: 6px; font-size: 0.85rem; display: flex; justify-content: space-between; border-left: 3px solid var(--success); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+        input[type="text"], input[type="number"] { background: var(--bg-body); border: 1px solid var(--border); color: var(--text-main); padding: 6px; border-radius: 6px; }
+        @media (max-width: 900px) { .sidebar-left, .main-content { grid-column: span 12; } }
+    </style>
+</head>
+<body>
+
+<!-- Tela de Login Inicial Corrigida -->
+<div id="auth-screen">
+    <div class="auth-card">
+        <h2 style="margin-bottom: 10px; color: var(--primary);">Nuvem Foco ENEM ☁️</h2>
+        <p style="font-size:0.85rem; color: var(--text-muted); margin-bottom: 20px;">Gerencie seus estudos em qualquer lugar</p>
+        <input type="email" id="auth-email" class="auth-input" placeholder="Seu E-mail">
+        <input type="password" id="auth-senha" class="auth-input" placeholder="Sua Senha">
+        
+        <button class="big-button btn-start" onclick="fazerLogin()">Acessar Minha Conta</button>
+        <button class="big-button btn-ai" style="margin-top: 5px; font-size: 0.85rem;" onclick="fazerCadastro()">Criar Nova Conta Grátis</button>
+        
+        <p id="auth-erro" style="color: #e74c3c; margin-top: 12px; font-size: 0.85rem; font-weight: bold;"></p>
+    </div>
+</div>
+
+<div class="container">
+    <header>
+        <h1>Foco ENEM 2026 🎯</h1>
+        <button onclick="fazerLogout()" style="background:transparent; border:1px solid #e74c3c; color:#e74c3c; padding: 4px 10px; border-radius:6px; cursor:pointer;">Desconectar</button>
+    </header>
+
+    <!-- ESQUERDA: HISTÓRICO -->
+    <div class="sidebar-left">
+        <div class="card" style="flex-grow: 1;">
+            <h3>📅 Dias Estudados</h3>
+            <div class="history-list" id="historico-lista"></div>
+        </div>
+        <div class="card">
+            <h3>📊 Configuração de Metas</h3>
+            <div style="margin: 10px 0; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+                <span>Meta Diária (Horas):</span>
+                <input type="number" id="meta-input" value="4" style="width: 60px; text-align: center;" onchange="salvarMeta()">
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Total Acumulado:</p>
+            <p style="font-size: 1.8rem; font-weight: bold; color: var(--success);" id="total-geral">0h 00min</p>
+        </div>
+    </div>
+
+    <!-- DIREITA: DASHBOARD -->
+    <div class="main-content">
+        <div class="card hoje-box">
+            <h3 id="txt-dia-semana" style="color: var(--accent);">Hoje</h3>
+            <p id="txt-materia-hoje" style="font-size: 1.1rem; margin-top: 5px;">Carregando...</p>
+        </div>
+
+        <div class="card ai-box">
+            <h3>🤖 Assistente Virtual Athena</h3>
+            <div id="ai-bloco" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;">
+                <p><strong>💡 Tema sugerido:</strong> <span id="ai-tema" style="color: #fff; font-weight:bold;"></span></p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;"><strong>🎯 Foco:</strong> <span id="ai-foco"></span></p>
+                <p style="margin-top: 8px;">
+                    <a id="lnk-google" target="_blank" style="color: #ff9f43; text-decoration: none; font-size: 0.85rem; font-weight: bold; margin-right: 15px;" href="#">🔍 Ver no Google</a>
+                    <a id="lnk-youtube" target="_blank" style="color: #ff6b6b; text-decoration: none; font-size: 0.85rem; font-weight: bold;" href="#">📺 Ver no YouTube</a>
+                </p>
+            </div>
+            <button class="big-button btn-ai" onclick="gerarSugestaoIA()">✨ Sugerir Conteúdo / Aula para Hoje</button>
+        </div>
+
+        <div class="card countdown-box">
+            <h3>⏳ Tempo até o ENEM 2026</h3>
+            <div class="timer-display" id="contador-regressivo">00d 00h 00m 00s</div>
+        </div>
+
+        <div class="card timer-section">
+            <h3>⏱️ Cronômetro</h3>
+            <div class="timer-display" id="txt-cronometro" style="color: var(--primary);">00:00:00</div>
+            <button id="btn-cronometro" class="big-button btn-start" onclick="controlarCronometro()">Iniciar</button>
+        </div>
+
+        <div class="card streak-box">
+            <h3>🔥 Sequência</h3>
+            <div class="streak-number" id="txt-streak">0</div>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Dias Seguidos</p>
+        </div>
+
+        <div class="card progress-box">
+            <h3 id="txt-progresso">📊 Meta de Estudo Semanal (0%)</h3>
+            <div class="progress-container"><div class="progress-bar" id="barra-progresso"></div></div>
+        </div>
+
+        <div class="card checklist-box">
+            <h3>✅ Checklist de Hoje</h3>
+            <div id="checklist-alvo"></div>
+        </div>
+
+        <div class="card cronograma-box">
+            <h3>📚 Configurar Cronograma Semanal</h3>
+            <div id="cronograma-alvo" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="card redacao-box">
+            <h3>📝 Controle de Redações</h3>
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <input type="text" id="add-tema" placeholder="Tema da Redação" style="flex-grow: 1;">
+                <input type="number" id="add-nota" placeholder="Nota" style="width: 80px;">
+                <button class="btn-add" onclick="adicionarRedacao()">Salvar</button>
+            </div>
+            <table>
+                <thead><tr><th>Tema</th><th>Nota</th><th>Ação</th></tr></thead>
+                <tbody id="redacao-tabela-corpo"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURAÇÃO DO SEU FIREBASE REAL ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDXJjaJ0HoQt9t3HUoEBeVs28CsnqCxj00",
+        authDomain: "projetoenem-8f434.firebaseapp.com",
+        databaseURL: "https://projetoenem-8f434-default-rtdb.firebaseio.com",
+        projectId: "projetoenem-8f434",
+        storageBucket: "projetoenem-8f434.firebasestorage.app",
+        messagingSenderId: "371919108989",
+        appId: "1:371919108989:web:c5f6deae1f1c48c83d2a14"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const baseIA = {
+        "Matemática": [{t: "Regra de Três e Proporção", f: "Razões simples e escalas."}, {t: "Geometria Espacial", f: "Volume de prismas e cilindros."}, {t: "Estatística Básica", f: "Média, Mediana e Moda."}],
+        "Humanas": [{t: "Era Vargas", f: "Leis trabalhistas e populismo."}, {t: "Globalização", f: "Impactos no mercado e blocos."}, {t: "Brasil Colônia", f: "Economia açucareira e escravidão."}],
+        "Natureza": [{t: "Ecologia", f: "Cadeia alimentar e poluição."}, {t: "Eletrodinâmica", f: "Circuitos e consumo em kWh."}, {t: "Química Orgânica", f: "Funções oxigenadas."}],
+        "Linguagens": [{t: "Funções da Linguagem", f: "Apelativa, emotiva, etc."}, {t: "Variação Linguística", f: "Preceito e marcas regionais."}, {t: "Modernismo", f: "Fases do modernismo no Brasil."}],
+        "Redação": [{t: "Proposta de Intervenção", f: "Treine os 5 elementos obrigatórios."}, {t: "Repertórios Coringas", f: "Uso da Constituição Federal."}]
+    };
+
+    const nomesDias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    let usuarioAtual = null;
+    
+    let dados = {
+        metaDiaria: 4,
+        checklist: [{ texto: "Assistir Teoria", d: false }, { texto: "Fazer Exercícios", d: false }, { texto: "Revisão Espaçada", d: false }],
+        cronograma: { "Segunda": "Matemática / Humanas", "Terça": "Natureza / Linguagens", "Quarta": "Matemática / Redação", "Quinta": "Natureza / Humanas", "Sexta": "Linguagens / Redação", "Sábado": "Simulado Completo", "Domingo": "Descanso Ativo" },
+        historico: [], redacoes: [], segundosTotais: 0, streak: 0, ultimoDiaEstudado: ""
+    };
+
+    let rodando = false; let tempoInterval = null; let inicioTime = 0;
+
+    // AÇÃO DE LOGIN DIRETO
+    function fazerLogin() {
+        const email = document.getElementById("auth-email").value;
+        const senha = document.getElementById("auth-senha").value;
+        const erroTxt = document.getElementById("auth-erro");
+        if(!email || !senha) return alert("Por favor, digite seu e-mail e senha!");
+
+        erroTxt.innerText = "Carregando...";
+        firebase.auth().signInWithEmailAndPassword(email, senha)
+        .catch(error => {
+            erroTxt.innerText = "Erro: Usuário não encontrado ou senha incorreta.";
+        });
+    }
+
+    // AÇÃO DE CADASTRO SEPARADO
+    function fazerCadastro() {
+        const email = document.getElementById("auth-email").value;
+        const senha = document.getElementById("auth-senha").value;
+        const erroTxt = document.getElementById("auth-erro");
+        if(!email || !senha) return alert("Preencha e-mail e senha para criar a sua conta!");
+        if(senha.length < 6) return alert("A senha precisa ter pelo menos 6 caracteres!");
+
+        erroTxt.innerText = "Criando conta na nuvem...";
+        firebase.auth().createUserWithEmailAndPassword(email, senha)
+        .then(() => {
+            erroTxt.innerText = "Conta criada com sucesso! Carregando...";
+        })
+        .catch(error => {
+            if(error.code === 'auth/email-already-in-use') {
+                erroTxt.innerText = "Esse e-mail já possui conta. Digite a senha correta e clique em Acessar.";
+            } else {
+                erroTxt.innerText = error.message;
+            }
+        });
+    }
+
+    // OUVINTE DE SESSÃO
+    firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+            usuarioAtual = user;
+            document.getElementById("auth-screen").style.display = "none";
+            firebase.database().ref('usuarios/' + user.uid).on('value', snapshot => {
+                const nuvemData = snapshot.val();
+                if(nuvemData) { 
+                    dados = nuvemData; 
+                    if(dados.metaDiaria === undefined) dados.metaDiaria = 4;
+                }
+                document.getElementById("meta-input").value = dados.metaDiaria;
+                sincronizarTela();
+            });
+        } else {
+            document.getElementById("auth-screen").style.display = "flex";
+        }
+    });
+
+    function fazerLogout() { firebase.auth().signOut(); window.location.reload(); }
+
+    function sincronizarTela() {
+        atualizarDiaAtual(); renderizarChecklist(); renderizarCronograma(); renderizarHistorico(); renderizarRedacoes();
+    }
+
+    function salvar() {
+        if(usuarioAtual) {
+            firebase.database().ref('usuarios/' + usuarioAtual.uid).set(dados);
+        }
+        calcularProgresso();
+    }
+
+    function salvarMeta() {
+        const novaMeta = parseFloat(document.getElementById("meta-input").value);
+        dados.metaDiaria = isNaN(novaMeta) ? 4 : novaMeta;
+        salvar();
+    }
+
+    function atualizarDiaAtual() {
+        const hoje = new Date(); const diaSemanaNome = nomesDias[hoje.getDay()];
+        document.getElementById("txt-dia-semana").innerText = `📅 Hoje é ${diaSemanaNome}-feira`;
+        document.getElementById("txt-materia-hoje").innerText = `📚 Foco Programado: ${dados.cronograma[diaSemanaNome] || "Livre"}`;
+    }
+
+    function atualizarContadorRegressivo() {
+        const alvo = new Date("November 1, 2026 13:00:00").getTime();
+        const diff = alvo - new Date().getTime();
+        if (diff <= 0) { document.getElementById("contador-regressivo").innerText = "A prova começou!"; return; }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        document.getElementById("contador-regressivo").innerText = `${d}d ${h.toString().padStart(2,'0')}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
+    }
+    setInterval(atualizarContadorRegressivo, 1000);
+
+    function controlarCronometro() {
+        const btn = document.getElementById("btn-cronometro");
+        if (!rodando) {
+            rodando = true; btn.innerText = "Parar e Salvar Tempo"; btn.className = "big-button btn-stop"; inicioTime = Date.now();
+            tempoInterval = setInterval(() => {
+                const totalSeg = Math.floor((Date.now() - inicioTime) / 1000);
+                const hrs = Math.floor(totalSeg / 3600); const min = Math.floor((totalSeg % 3600) / 60); const seg = totalSeg % 60;
+                document.getElementById("txt-cronometro").innerText = `${hrs.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${seg.toString().padStart(2,'0')}`;
+            }, 1000);
+        } else {
+            rodando = false; btn.innerText = "Iniciar"; btn.className = "big-button btn-start"; clearInterval(tempoInterval);
+            const segundosGanhos = Math.floor((Date.now() - inicioTime) / 1000);
+            if (segundosGanhos > 1) {
+                dados.segundosTotais += segundosGanhos;
+                const hrs = Math.floor(segundosGanhos / 3600); const min = Math.floor((segundosGanhos % 3600) / 60);
+                dados.historico.unshift({ data: new Date().toLocaleDateString('pt-BR'), materia: dados.cronograma[nomesDias[new Date().getDay()]] || "Geral", duracao: `${hrs}h ${min}min` });
+                processarStreak();
+            }
+            document.getElementById("txt-cronometro").innerText = "00:00:00"; salvar();
+        }
+    }
+
+    function processarStreak() {
+        const hojeStr = new Date().toDateString(); if (dados.ultimoDiaEstudado === hojeStr) return;
+        const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+        dados.streak = (dados.ultimoDiaEstudado === ontem.toDateString() || dados.ultimoDiaEstudado === "") ? dados.streak + 1 : 1;
+        dados.ultimoDiaEstudado = hojeStr;
+    }
+
+    function gerarSugestaoIA() {
+        const cronogramaTexto = dados.cronograma[nomesDias[new Date().getDay()]] || "";
+        let cat = "Matemática";
+        if (cronogramaTexto.toLowerCase().includes("humanas")) cat = "Humanas";
+        else if (cronogramaTexto.toLowerCase().includes("natureza")) cat = "Natureza";
+        else if (cronogramaTexto.toLowerCase().includes("linguagens")) cat = "Linguagens";
+        else if (cronogramaTexto.toLowerCase().includes("redação")) cat = "Redação";
+        const sorteio = baseIA[cat][Math.floor(Math.random() * baseIA[cat].length)];
+        document.getElementById("ai-tema").innerText = `[${cat}] ${sorteio.t}`;
+        document.getElementById("ai-foco").innerText = sorteio.f;
+        document.getElementById("lnk-google").href = `https://www.google.com/search?q=${encodeURIComponent('aula enem ' + sorteio.t)}`;
+        document.getElementById("lnk-youtube").href = `https://www.youtube.com/results?search_query=${encodeURIComponent('aula enem ' + sorteio.t)}`;
+        document.getElementById("ai-bloco").style.display = "block";
+    }
+
+    function renderizarHistorico() {
+        const container = document.getElementById("historico-lista"); container.innerHTML = "";
+        document.getElementById("total-geral").innerText = `${Math.floor(dados.segundosTotais / 3600)}h ${Math.floor((dados.segundosTotais % 3600) / 60)}min`;
+        document.getElementById("txt-streak").innerText = dados.streak;
+        if (dados.historico.length === 0) { container.innerHTML = `<p style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding-top:15px;">Sem registros.</p>`; return; }
+        dados.historico.forEach(item => {
+            const div = document.createElement("div"); div.className = "history-item";
+            div.innerHTML = `<div><strong>${item.data}</strong><br><small style="color:var(--text-muted)">${item.materia}</small></div><div style="font-weight:bold; color:var(--primary); align-self:center;">${item.duracao}</div>`;
+            container.appendChild(div);
+        });
+        calcularProgresso();
+    }
+
+    function renderizarChecklist() {
+        const div = document.getElementById("checklist-alvo"); div.innerHTML = "";
+        dados.checklist.forEach((item, i) => {
+            const el = document.createElement("div"); el.className = "list-item";
+            el.innerHTML = `<input type="checkbox" ${item.d ? "checked" : ""} onchange="mudarCheck(${i})"><span class="${item.d ? 'done' : ''}">${item.texto}</span>`;
+            div.appendChild(el);
+        });
+        calcularProgresso();
+    }
+    function mudarCheck(i) { dados.checklist[i].d = !dados.checklist[i].d; salvar(); renderizarChecklist(); }
+    
+    function calcularProgresso() {
+        const horasEstudadas = dados.segundosTotais / 3600;
+        const metaAlvo = dados.metaDiaria || 4;
+        
+        let pct = Math.round((horasEstudadas / metaAlvo) * 100);
+        if(pct > 100) pct = 100;
+        if(isNaN(pct) || pct < 0) pct = 0;
+
+        document.getElementById("barra-progresso").style.width = `${pct}%`;
+        document.getElementById("txt-progresso").innerText = `📊 Progresso para a Meta (${pct}%)`;
+    }
+
+    function renderizarCronograma() {
+        const div = document.getElementById("cronograma-alvo"); div.innerHTML = "";
+        for (let dia in dados.cronograma) {
+            const el = document.createElement("div"); el.className = "day-row";
+            el.innerHTML = `<span class="day-name">${dia}</span><input type="text" class="day-task" value="${dados.cronograma[dia]}" onchange="salvarCronograma('${dia}', this.value)">`;
+            div.appendChild(el);
+        }
+    }
+    function salvarCronograma(dia, val) { dados.cronograma[dia] = val; salvar(); atualizarDiaAtual(); }
+
+    function renderizarRedacoes() {
+        const tbody = document.getElementById("redacao-tabela-corpo"); tbody.innerHTML = "";
+        dados.redacoes.forEach((red, i) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${red.t}</td><td style="color:var(--accent); font-weight:bold;">${red.n}</td><td><button onclick="deletarRedacao(${i})" style="background:#e74c3c; border:none; color:white; padding:2px 6px; border-radius:4px; cursor:pointer;">X</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+    function adicionarRedacao() {
+        const t = document.getElementById("add-tema").value; const n = document.getElementById("add-nota").value; if (!t) return;
+        dados.redacoes.push({ t: t, n: n || "Sem Nota" }); document.getElementById("add-tema").value = ""; document.getElementById("add-nota").value = ""; salvar(); renderizarRedacoes();
+    }
+    function deletarRedacao(i) { dados.redacoes.splice(i, 1); salvar(); renderizarRedacoes(); }
+</script>
+</body>
+</html>
