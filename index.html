@@ -374,15 +374,24 @@
     function mudarCheck(i) { dados.checklist[i].d = !dados.checklist[i].d; salvar(); renderizarChecklist(); }
     
     function calcularProgresso() {
-        const horasEstudadas = dados.segundosTotais / 3600;
-        const metaAlvo = dados.metaDiaria || 4;
+        // 1. Calcula a Meta Semanal (Meta Diária multiplicada por 6 dias de estudo na semana)
+        const metaDiaria = parseFloat(dados.metaDiaria) || 4;
+        const metaSemanalHoras = metaDiaria * 6; 
         
-        let pct = Math.round((horasEstudadas / metaAlvo) * 100);
-        if(pct > 100) pct = 100;
-        if(isNaN(pct) || pct < 0) pct = 0;
+        // 2. Calcula quantas horas você já estudou no total geral
+        const totalSegundos = dados.segundosTotais || 0;
+        const horasEstudadasTotal = totalSegundos / 3600;
+        
+        // 3. Calcula a porcentagem do progresso semanal
+        let pct = Math.round((horasEstudadasTotal / metaSemanalHoras) * 100);
+        
+        // 4. Garante que o valor fique entre 0% e 100% para não quebrar o layout da barra
+        if (pct > 100) pct = 100;
+        if (isNaN(pct) || pct < 0) pct = 0;
 
+        // 5. Atualiza a barra visual e o texto na tela
         document.getElementById("barra-progresso").style.width = `${pct}%`;
-        document.getElementById("txt-progresso").innerText = `📊 Progresso para a Meta (${pct}%)`;
+        document.getElementById("txt-progresso").innerText = `📊 Meta de Estudo Semanal (${pct}%)`;
     }
 
     function renderizarCronograma() {
