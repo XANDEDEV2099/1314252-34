@@ -287,7 +287,7 @@
     }
 
     function atualizarContadorRegressivo() {
-        const alvo = new Date("November 1, 2026 13:00:00").getTime();
+        const alvo = new Date("November 8, 2026 13:00:00").getTime();
         const diff = alvo - new Date().getTime();
         if (diff <= 0) { document.getElementById("contador-regressivo").innerText = "A prova começou!"; return; }
         const d = Math.floor(diff / 86400000);
