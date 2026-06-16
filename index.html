@@ -287,13 +287,20 @@
     }
 
     function atualizarContadorRegressivo() {
-        const alvo = new Date("November 8, 2026 13:00:00").getTime();
+        // Data exata do primeiro domingo do ENEM 2026 às 13:00
+        const alvo = new Date("2026-11-08T13:00:00").getTime();
         const diff = alvo - new Date().getTime();
-        if (diff <= 0) { document.getElementById("contador-regressivo").innerText = "A prova começou!"; return; }
+        
+        if (diff <= 0) { 
+            document.getElementById("contador-regressivo").innerText = "A prova começou!"; 
+            return; 
+        }
+        
         const d = Math.floor(diff / 86400000);
         const h = Math.floor((diff % 86400000) / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
+        
         document.getElementById("contador-regressivo").innerText = `${d}d ${h.toString().padStart(2,'0')}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`;
     }
     setInterval(atualizarContadorRegressivo, 1000);
